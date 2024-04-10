@@ -1,0 +1,94 @@
+<?php
+/*
+Plugin Name: Secure Third-Party Payment
+Plugin URI: https://example.com/
+Description: Enables users to send their shopping cart to a third-party payment processor without sharing the delivery address.
+Version: 1.0
+Author: Your Name
+Author URI: https://example.com/
+*/
+
+// Add the necessary hooks and filters
+add_action('woocommerce_checkout_process', 'process_third_party_payment');
+add_action('woocommerce_checkout_order_processed', 'store_delivery_address');
+
+// Process the third-party payment
+function process_third_party_payment() {
+    if (isset($_POST['payment_method']) && $_POST['payment_method'] === 'third_party_payment') {
+        global $woocommerce;
+
+        // Get the cart details
+        $cart_details = array(
+            'items' => $woocommerce->cart->get_cart(),
+            'total' => $woocommerce->cart->total,
+            // Add other relevant cart details
+        );
+
+        // Get the payment information
+        $payment_info = array(
+            'card_number' => $_POST['card_number'],
+            'expiry_date' => $_POST['expiry_date'],
+            'cvv' => $_POST['cvv'],
+            // Add other payment information
+        );
+
+        // Prepare the data to send to the third-party payment processor
+        $data = array(
+            'cart_details' => $cart_details,
+            'payment_info' => $payment_info,
+            // Add any other necessary data
+        );
+
+        // Send the data to the third-party payment processor securely
+        $response = wp_remote_post('https://third-party-payment-processor.com/api/process-payment', array(
+            'method' => 'POST',
+            'timeout' => 45,
+            'redirection' => 5,
+            'httpversion' => '1.0',
+            'blocking' => true,
+            'headers' => array(),
+            'body' => json_encode($data),
+            'cookies' => array()
+        ));
+
+        // Handle the response from the third-party payment processor
+        if (is_wp_error($response)) {
+            // Payment processing failed
+            wc_add_notice('Payment processing failed. Please try again.', 'error');
+        } else {
+            // Payment processing successful
+            $order_id = $woocommerce->cart->get_cart_hash();
+            $woocommerce->cart->empty_cart();
+            wp_redirect($woocommerce->cart->get_checkout_order_received_url($order_id));
+            exit;
+        }
+    }
+}
+
+// Store the delivery address securely
+function store_delivery_address($order_id) {
+    if (isset($_POST['payment_method']) && $_POST['payment_method'] === 'third_party_payment') {
+        $delivery_address = array(
+            'first_name' => $_POST['billing_first_name'],
+            'last_name' => $_POST['billing_last_name'],
+            'address_1' => $_POST['billing_address_1'],
+            'address_2' => $_POST['billing_address_2'],
+            'city' => $_POST['billing_city'],
+            'state' => $_POST['billing_state'],
+            'postcode' => $_POST['billing_postcode'],
+            'country' => $_POST['billing_country'],
+            // Add other address fields
+        );
+
+        // Store the delivery address securely (e.g., encrypt and save to the database)
+        // Implement your own secure storage mechanism here
+        // For example, you can use WordPress options or custom database tables
+        update_post_meta($order_id, '_secure_delivery_address', encrypt($delivery_address));
+    }
+}
+
+// Dummy encryption function (replace with your own encryption mechanism)
+function encrypt($data) {
+    // Implement your encryption logic here
+    return base64_encode(json_encode($data));
+}
